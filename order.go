@@ -4,14 +4,10 @@ import (
 	"time"
 )
 
-type OrderSide uint8
-
 const (
-	Buy OrderSide = iota
+	Buy Side = iota
 	Sell
 )
-
-type OrderType uint8
 
 const (
 	Market OrderType = iota
@@ -21,10 +17,10 @@ const (
 )
 
 type Order struct {
-	ID        string
+	ID        OrderID
 	Type      OrderType
-	Side      OrderSide
-	Price     int64
-	Quantity  uint64
+	Side      Side
+	Price     Price
+	Quantity  Quantity
 	Timestamp time.Time
 }
