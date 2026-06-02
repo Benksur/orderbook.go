@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 )
 
 type BookSide struct {
-	Map   map[Price][]Order
-	Index []Price
+	Levels     map[Price][]Order
+	PriceIndex []Price
+	OrderIndex map[OrderID]Price
 }
 
 type OrderBook struct {
@@ -16,9 +18,11 @@ type OrderBook struct {
 	Asks BookSide
 }
 
-func insertSorted(prices []Price, target Price) []Price {
+/* ================================= PRIVATE API =========================================== */
+
+func insertSorted(prices []Price, target Price, less func(a, b Price) bool) []Price {
 	i := sort.Search(len(prices), func(i int) bool {
-		return prices[i] >= target
+		return !less(prices[i], target)
 	})
 	prices = append(prices, 0)
 	copy(prices[i+1:], prices[i:])
@@ -26,34 +30,57 @@ func insertSorted(prices []Price, target Price) []Price {
 	return prices
 }
 
-func addToBook(bs *BookSide, o Order) {
-	if _, ok := bs.Map[o.Price]; !ok {
-		bs.Index = insertSorted(bs.Index, o.Price)
+func addToBookSide(bs *BookSide, o Order, less func(a, b Price) bool) {
+	if _, ok := bs.Levels[o.Price]; !ok {
+		bs.PriceIndex = insertSorted(bs.PriceIndex, o.Price, less)
 	}
-	bs.Map[o.Price] = append(bs.Map[o.Price], o)
+	bs.Levels[o.Price] = append(bs.Levels[o.Price], o)
+	bs.OrderIndex[o.ID] = o.Price
 }
+
+func remove(orderId OrderID, bs *BookSide, p Price) {
+	level := bs.Levels[p]
+	for idx, order := range level {
+		if order.ID == orderId {
+			bs.Levels[p] = slices.Delete(level, idx, idx+1)
+			// if no more orders at that price
+			if len(bs.Levels[p]) == 0 {
+				delete(bs.Levels, p)
+				bs.PriceIndex = slices.DeleteFunc(bs.PriceIndex, func(n Price) bool {
+					return n == p
+				})
+			}
+		}
+	}
+	delete(bs.OrderIndex, orderId)
+}
+
+/* ================================= PUBLIC API =========================================== */
 
 func (ob *OrderBook) Add(order Order) {
 	switch order.Side {
 	case Buy:
-		addToBook(&ob.Asks, order)
+		addToBookSide(&ob.Bids, order, func(a, b Price) bool { return a > b }) // descending
 	case Sell:
-		addToBook(&ob.Bids, order)
+		addToBookSide(&ob.Asks, order, func(a, b Price) bool { return a < b }) // ascending
 	}
 }
 
-func (ob *OrderBook) Cancel(orderId string) {
-
-}
-
-func (ob *OrderBook) GetOrder(orderId string) {
-
+func (ob *OrderBook) Cancel(orderId OrderID) {
+	if price, ok := ob.Asks.OrderIndex[orderId]; ok {
+		remove(orderId, &ob.Asks, price)
+		return
+	}
+	if price, ok := ob.Bids.OrderIndex[orderId]; ok {
+		remove(orderId, &ob.Bids, price)
+		return
+	}
 }
 
 func (ob OrderBook) Print() {
 	fmt.Println("========== BIDS ==========")
-	for _, level := range ob.Bids.Map {
-		for _, order := range level {
+	for _, level := range ob.Bids.PriceIndex {
+		for _, order := range ob.Bids.Levels[level] {
 			fmt.Printf("ID: %s, Type: %d, Price: %d, Quantity: %d, Time: %s\n",
 				order.ID,
 				order.Type,
@@ -64,8 +91,8 @@ func (ob OrderBook) Print() {
 		}
 	}
 	fmt.Println("========== ASKS ==========")
-	for _, level := range ob.Asks.Map {
-		for _, order := range level {
+	for _, level := range ob.Asks.PriceIndex {
+		for _, order := range ob.Asks.Levels[level] {
 			fmt.Printf("ID: %s, Type: %d, Price: %d, Quantity: %d, Time: %s\n",
 				order.ID,
 				order.Type,
