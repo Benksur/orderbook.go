@@ -77,6 +77,37 @@ func (ob *OrderBook) Cancel(orderId OrderID) {
 	}
 }
 
+func (ob *OrderBook) Match() {
+	for {
+		//always pop from head of queue. will need to track indices for FOK
+		bestBidLevel := ob.Bids.Levels[ob.Bids.PriceIndex[0]]
+		bestBid := &bestBidLevel[0]
+		bestAskLevel := ob.Asks.Levels[ob.Asks.PriceIndex[0]]
+		bestAsk := &bestAskLevel[0]
+
+		fmt.Printf("matching bid with price: %d, quantity %d\n", bestBid.Price, bestBid.Quantity)
+		fmt.Printf("matching ask with price: %d, quantity %d\n", bestAsk.Price, bestAsk.Quantity)
+
+		if bestAsk.Price <= bestBid.Price {
+			fmt.Println("made trade")
+
+			if bestBid.Quantity > bestAsk.Quantity {
+				bestBid.Quantity -= bestAsk.Quantity
+				remove(bestAsk.ID, &ob.Asks, bestAsk.Price)
+			} else if bestAsk.Quantity > bestBid.Quantity {
+				bestAsk.Quantity -= bestBid.Quantity
+				remove(bestBid.ID, &ob.Bids, bestBid.Price)
+			} else {
+				remove(bestAsk.ID, &ob.Asks, bestAsk.Price)
+				remove(bestBid.ID, &ob.Bids, bestBid.Price)
+			}
+		} else {
+			break
+		}
+
+	}
+}
+
 func (ob OrderBook) Print() {
 	fmt.Println("========== BIDS ==========")
 	for _, level := range ob.Bids.PriceIndex {
