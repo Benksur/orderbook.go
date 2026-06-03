@@ -79,7 +79,7 @@ func (ob *OrderBook) Cancel(orderId OrderID) {
 
 func (ob *OrderBook) Match() {
 	for {
-		//always pop from head of queue. will need to track indices for FOK
+		//always pop from head of queue. need to support a simulation for FOK
 		bestBidLevel := ob.Bids.Levels[ob.Bids.PriceIndex[0]]
 		bestBid := &bestBidLevel[0]
 		bestAskLevel := ob.Asks.Levels[ob.Asks.PriceIndex[0]]
